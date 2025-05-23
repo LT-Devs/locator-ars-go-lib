@@ -1,4 +1,4 @@
-module github.com/kikowoll/locator-ars-go-lib
+module github.com/LT-Devs/locator-ars-go-lib
 
 go 1.24
 

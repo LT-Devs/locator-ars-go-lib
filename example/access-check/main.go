@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	locatorars "github.com/kikowoll/locator-ars-go-lib"
+	locatorars "github.com/LT-Devs/locator-ars-go-lib"
 )
 
 func main() {
