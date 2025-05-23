@@ -65,4 +65,30 @@ func (m *Middleware) RequireAction(action string) gin.HandlerFunc {
 		// Если доступ разрешен, продолжаем выполнение следующего обработчика
 		c.Next()
 	}
+}
+
+// CheckAccess проверяет права доступа для указанного действия, JWT токена и приложения
+// Возвращает true если доступ разрешен, false если запрещен
+// Может использоваться напрямую в условных выражениях
+func (m *Middleware) CheckAccess(action, jwt, application string) bool {
+	allowed, err := m.client.CheckAccess(action, jwt, application)
+	if err != nil {
+		log.Printf("Error checking access: %v", err)
+		// Возвращаем значение в соответствии с политикой обработки ошибок
+		return m.config.AllowOnFailure
+	}
+	return allowed
+}
+
+// CheckAccessFromContext проверяет права доступа, извлекая JWT токен и приложение из gin.Context
+// Удобно для использования в обработчиках
+func (m *Middleware) CheckAccessFromContext(c *gin.Context, action string) bool {
+	jwt := c.GetHeader("X-Authentik-Jwt")
+	application := c.GetHeader("Application")
+	
+	if jwt == "" || application == "" {
+		return false
+	}
+	
+	return m.CheckAccess(action, jwt, application)
 } 

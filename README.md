@@ -25,6 +25,7 @@ Middleware выполняет запрос к сервису Locator ARS для 
 - Настраиваемый URL сервиса проверки прав доступа
 - Возможность разрешить или запретить доступ при недоступности сервиса проверки
 - Передача JWT токена и идентификатора приложения
+- Методы для прямой проверки доступа в условных выражениях
 
 ## Использование
 
@@ -35,51 +36,24 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/yourusername/go-gin-postgres/database"
-	"github.com/yourusername/go-gin-postgres/handlers"
-	"github.com/yourusername/go-gin-postgres/middleware"
-
-	// Импортируем нашу библиотеку
 	locatorars "github.com/kikowoll/locator-ars-go-lib"
 )
 
-func SetupRoutes(router *gin.Engine, db *database.DBConnections) {
-	router.Use(middleware.Logging())
-	router.Use(middleware.Recovery())
+func main() {
+	r := gin.Default()
 
-	routerApi := router.Group("/api/v1")
-
-	authMiddleware := middleware.AuthMiddleware()
-
-	// Создаем middleware для проверки прав доступа
+	// Создаем middleware с конфигурацией по умолчанию
 	arsMiddleware := locatorars.NewMiddleware(locatorars.DefaultConfig())
 
-	petitionGroup := routerApi.Group("/petitions")
-	petitionGroup.Use(authMiddleware)
-	{
-		// Вариант 1: Применение к конкретному маршруту
-		petitionGroup.GET("", arsMiddleware.RequireAction("viewpetitions"), handlers.GetPetitions)
-		petitionGroup.GET("/unregistered", arsMiddleware.RequireAction("viewunregistered"), handlers.GetUnregisteredPetitions)
+	// Защищаем маршрут требованием права "viewallreports"
+	r.GET("/reports", arsMiddleware.RequireAction("viewallreports"), reportHandler)
 
-		// Остальные маршруты...
-		petitionGroup.GET("/:id", handlers.GetPetition)
+	r.Run(":8080")
+}
 
-		// Вариант 2: Применение к маршруту, требующему повышенных привилегий
-		petitionGroup.POST("", arsMiddleware.RequireAction("createpetition"), handlers.CreatePetition)
-		petitionGroup.POST("/create-multiple", arsMiddleware.RequireAction("createpetitions"), handlers.CreatePetitions)
-
-		// Остальные маршруты...
-	}
-
-	// Вариант 3: Создание новой группы со своим middleware для проверки прав
-	adminGroup := routerApi.Group("/admin")
-	adminGroup.Use(authMiddleware)
-	adminGroup.Use(arsMiddleware.RequireAction("adminaccess"))
-	{
-		// Все маршруты в этой группе требуют действия "adminaccess"
-		adminGroup.GET("/stats", handlers.GetStats)
-		adminGroup.POST("/settings", handlers.UpdateSettings)
-	}
+func reportHandler(c *gin.Context) {
+	// Обработчик выполнится только если право доступа подтверждено
+	// ...
 }
 ```
 
@@ -114,6 +88,43 @@ func adminHandler(c *gin.Context) {
 }
 ```
 
+### Прямая проверка доступа в условных выражениях
+
+```go
+func someHandler(c *gin.Context) {
+	// Создаем middleware
+	arsMiddleware := locatorars.NewMiddleware(locatorars.DefaultConfig())
+
+	// Вариант 1: Проверка с передачей параметров вручную
+	jwt := c.GetHeader("X-Authentik-Jwt")
+	application := c.GetHeader("Application")
+	if arsMiddleware.CheckAccess("viewreports", jwt, application) {
+		// Выполняем действия, требующие права "viewreports"
+		showReports(c)
+	} else {
+		// Обрабатываем отсутствие права доступа
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to view reports"})
+	}
+
+	// Вариант 2: Проверка с автоматическим извлечением JWT и Application из контекста
+	if arsMiddleware.CheckAccessFromContext(c, "editreport") {
+		// Выполняем действия, требующие права "editreport"
+		editReport(c)
+	} else {
+		// Обрабатываем отсутствие права доступа
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to edit report"})
+	}
+
+	// Использование в условных переходах
+	reportType := "standard"
+	if arsMiddleware.CheckAccessFromContext(c, "viewsecretreports") {
+		reportType = "secret"
+	}
+
+	// Используем reportType дальше...
+}
+```
+
 ## Параметры конфигурации
 
 | Параметр       | Тип    | По умолчанию                      | Описание                                                         |
@@ -136,6 +147,15 @@ Middleware может возвращать следующие HTTP статус�
 - `400 Bad Request`: Отсутствует заголовок Application
 - `403 Forbidden`: Доступ запрещен
 - `500 Internal Server Error`: Ошибка при проверке доступа (если AllowOnFailure=false)
+
+## Методы
+
+| Метод                                                        | Описание                                                      |
+| ------------------------------------------------------------ | ------------------------------------------------------------- |
+| `NewMiddleware(config Config) *Middleware`                   | Создает новый экземпляр middleware                            |
+| `RequireAction(action string) gin.HandlerFunc`               | Создает middleware для защиты маршрута                        |
+| `CheckAccess(action, jwt, application string) bool`          | Проверяет права доступа напрямую                              |
+| `CheckAccessFromContext(c *gin.Context, action string) bool` | Проверяет права доступа, извлекая данные из контекста запроса |
 
 ## Лицензия
 
