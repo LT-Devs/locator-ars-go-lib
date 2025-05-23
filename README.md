@@ -10,7 +10,7 @@
 ## Установка
 
 ```bash
-go get github.com/kikowoll/locator-ars-go-lib
+go get github.com/LT-Devs/locator-ars-go-lib
 ```
 
 ## Описание
