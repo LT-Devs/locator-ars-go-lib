@@ -1,15 +1,20 @@
 package locatorars
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"time"
 )
 
 // AccessResponse представляет ответ от сервиса проверки прав доступа
 type AccessResponse struct {
-	Allowed bool   `json:"allowed"`
-	Message string `json:"message,omitempty"`
+	Action   string `json:"action"`
+	Allowed  bool   `json:"allowed"`
+	Entity   string `json:"entity"`
+	Message  string `json:"message,omitempty"`
+	User     map[string]interface{} `json:"user,omitempty"`
 }
 
 // AccessClient клиент для проверки прав доступа
@@ -86,7 +91,36 @@ func (ac *AccessClient) CheckAccess(action, jwt, application string) (bool, erro
 		return false, fmt.Errorf("access service returned non-200 status: %d", resp.StatusCode)
 	}
 	
-	// Если статус OK, считаем что доступ разрешен
-	ac.logger.Debug("Access check successful, access granted")
-	return true, nil
+	// Читаем тело ответа
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		ac.logger.Error("Failed to read response body: %v", err)
+		if ac.config.AllowOnFailure {
+			ac.logger.Info("Access allowed on failure due to configuration")
+			return true, err
+		}
+		return false, err
+	}
+	
+	ac.logger.Debug("Response body: %s", string(body))
+	
+	// Парсим JSON ответ
+	var accessResponse AccessResponse
+	if err := json.Unmarshal(body, &accessResponse); err != nil {
+		ac.logger.Error("Failed to parse JSON response: %v", err)
+		if ac.config.AllowOnFailure {
+			ac.logger.Info("Access allowed on failure due to configuration")
+			return true, err
+		}
+		return false, err
+	}
+	
+	// Проверяем значение поля allowed
+	if accessResponse.Allowed {
+		ac.logger.Debug("Access check successful, access granted. Response: %+v", accessResponse)
+		return true, nil
+	} else {
+		ac.logger.Debug("Access check successful, but access denied. Response: %+v", accessResponse)
+		return false, nil
+	}
 } 
