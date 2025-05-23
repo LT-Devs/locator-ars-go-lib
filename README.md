@@ -36,7 +36,7 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	locatorars "github.com/kikowoll/locator-ars-go-lib"
+	locatorars "github.com/LT-Devs/locator-ars-go-lib"
 )
 
 func main() {
@@ -64,7 +64,7 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	locatorars "github.com/kikowoll/locator-ars-go-lib"
+	locatorars "github.com/LT-Devs/locator-ars-go-lib"
 )
 
 func main() {
