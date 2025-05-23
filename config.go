@@ -74,7 +74,7 @@ type Config struct {
 // DefaultConfig возвращает конфигурацию по умолчанию
 func DefaultConfig() Config {
 	return Config{
-		URL:            "http://locator/api/v1/ars/check",
+		URL:            "http://locator-ars:9012/api/v1/ars/check",
 		AllowOnFailure: false,
 		LogLevel:       LogLevelError,
 		Logger:         nil,
