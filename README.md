@@ -24,7 +24,7 @@ Middleware выполняет запрос к сервису Locator ARS для 
 - Интеграция с Gin framework
 - Настраиваемый URL сервиса проверки прав доступа
 - Возможность разрешить или запретить доступ при недоступности сервиса проверки
-- Передача JWT токена и идентификатора приложения
+- Передача Entitlements от Authentik и идентификатора приложения
 - Методы для прямой проверки доступа в условных выражениях
 - Гибкая система логирования с возможностью кастомизации
 
@@ -97,9 +97,9 @@ func someHandler(c *gin.Context) {
 	arsMiddleware := locatorars.NewMiddleware(locatorars.DefaultConfig())
 
 	// Вариант 1: Проверка с передачей параметров вручную
-	jwt := c.GetHeader("X-Authentik-Jwt")
+	entitlements := c.GetHeader("X-Authentik-Entitlements")
 	application := c.GetHeader("Application")
-	if arsMiddleware.CheckAccess("viewreports", jwt, application) {
+	if arsMiddleware.CheckAccess("viewreports", entitlements, application) {
 		// Выполняем действия, требующие права "viewreports"
 		showReports(c)
 	} else {
@@ -107,7 +107,7 @@ func someHandler(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to view reports"})
 	}
 
-	// Вариант 2: Проверка с автоматическим извлечением JWT и Application из контекста
+	// Вариант 2: Проверка с автоматическим извлечением Entitlements и Application из контекста
 	if arsMiddleware.CheckAccessFromContext(c, "editreport") {
 		// Выполняем действия, требующие права "editreport"
 		editReport(c)
@@ -259,7 +259,7 @@ func main() {
 
 Для корректной работы middleware клиент должен передавать следующие HTTP заголовки:
 
-- `X-Authentik-Jwt`: JWT токен пользователя
+- `X-Authentik-Entitlements`: Entitlements от Authentik
 - `Application`: Идентификатор приложения
 
 ## Коды ответов

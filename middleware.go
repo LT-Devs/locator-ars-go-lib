@@ -2,7 +2,6 @@ package locatorars
 
 import (
 	"net/http"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -21,7 +20,7 @@ func NewMiddleware(config Config) *Middleware {
 	} else {
 		logger = NewDefaultLogger(config.LogLevel)
 	}
-	
+
 	return &Middleware{
 		client: NewAccessClient(config),
 		config: config,
@@ -33,30 +32,28 @@ func NewMiddleware(config Config) *Middleware {
 func (m *Middleware) RequireAction(action string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		m.logger.Debug("Checking access for action: %s", action)
-		
+
 		// Получаем необходимые заголовки
-		jwt := c.GetHeader("X-Authentik-Jwt")
-		if jwt == "" {
-			m.logger.Info("Missing X-Authentik-Jwt header in request")
+		entitlements := c.GetHeader("X-Authentik-Entitlements")
+		if entitlements == "" {
+			m.logger.Info("Missing X-Authentik-Entitlements header in request")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "Missing X-Authentik-Jwt header",
+				"error": "Missing X-Authentik-Entitlements header",
 			})
 			return
 		}
 
+		// Application header is no longer required as authentik provides entitlements for specific applications
 		application := c.GetHeader("Application")
 		if application == "" {
-			m.logger.Info("Missing Application header in request")
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-				"error": "Missing Application header",
-			})
-			return
+			// Use default application identifier or extract from context if needed
+			application = "default"
 		}
 
-		m.logger.Debug("Headers found: Application=%s, JWT present=%v", application, len(jwt) > 0)
+		m.logger.Debug("Headers found: Application=%s, Entitlements present=%v", application, len(entitlements) > 0)
 
 		// Проверяем доступ
-		allowed, err := m.client.CheckAccess(action, jwt, application)
+		allowed, err := m.client.CheckAccess(action, entitlements)
 		if err != nil {
 			m.logger.Error("Error checking access: %v", err)
 			if !m.config.AllowOnFailure {
@@ -84,42 +81,41 @@ func (m *Middleware) RequireAction(action string) gin.HandlerFunc {
 	}
 }
 
-// CheckAccess проверяет права доступа для указанного действия, JWT токена и приложения
+// CheckAccess проверяет права доступа для указанного действия, Entitlements и приложения
 // Возвращает true если доступ разрешен, false если запрещен
 // Может использоваться напрямую в условных выражениях
-func (m *Middleware) CheckAccess(action, jwt, application string) bool {
-	m.logger.Debug("Direct check for action: %s, application: %s", action, application)
-	
-	allowed, err := m.client.CheckAccess(action, jwt, application)
+func (m *Middleware) CheckAccess(action, entitlements string) bool {
+	m.logger.Debug("Direct check for action: %s", action)
+
+	allowed, err := m.client.CheckAccess(action, entitlements)
 	if err != nil {
 		m.logger.Error("Error in direct access check: %v", err)
 		// Возвращаем значение в соответствии с политикой обработки ошибок
 		return m.config.AllowOnFailure
 	}
-	
+
 	if allowed {
 		m.logger.Info("Direct access check: granted for action: %s", action)
 	} else {
 		m.logger.Info("Direct access check: denied for action: %s", action)
 	}
-	
+
 	return allowed
 }
 
-// CheckAccessFromContext проверяет права доступа, извлекая JWT токен и приложение из gin.Context
+// CheckAccessFromContext проверяет права доступа, извлекая Entitlements и приложение из gin.Context
 // Удобно для использования в обработчиках
 func (m *Middleware) CheckAccessFromContext(c *gin.Context, action string) bool {
-	jwt := c.GetHeader("X-Authentik-Jwt")
-	application := c.GetHeader("Application")
-	
-	m.logger.Debug("Context check for action: %s, application: %s", action, application)
-	
-	if jwt == "" || application == "" {
+	entitlements := c.GetHeader("X-Authentik-Entitlements")
+
+	m.logger.Debug("Context check for action: %s", action)
+
+	if entitlements == "" {
 		m.logger.Info("Context access check: missing headers for action: %s", action)
 		return false
 	}
-	
-	return m.CheckAccess(action, jwt, application)
+
+	return m.CheckAccess(action, entitlements)
 }
 
 // SetLogLevel устанавливает уровень логирования для middleware
@@ -127,4 +123,4 @@ func (m *Middleware) SetLogLevel(level LogLevel) {
 	if defaultLogger, ok := m.logger.(*DefaultLogger); ok {
 		defaultLogger.level = level
 	}
-} 
+}

@@ -10,18 +10,18 @@ import (
 
 // AccessResponse представляет ответ от сервиса проверки прав доступа
 type AccessResponse struct {
-	Action   string `json:"action"`
-	Allowed  bool   `json:"allowed"`
-	Entity   string `json:"entity"`
-	Message  string `json:"message,omitempty"`
-	User     map[string]interface{} `json:"user,omitempty"`
+	Action  string                 `json:"action"`
+	Allowed bool                   `json:"allowed"`
+	Entity  string                 `json:"entity"`
+	Message string                 `json:"message,omitempty"`
+	User    map[string]interface{} `json:"user,omitempty"`
 }
 
 // AccessClient клиент для проверки прав доступа
 type AccessClient struct {
-	config  Config
-	client  *http.Client
-	logger  Logger
+	config Config
+	client *http.Client
+	logger Logger
 }
 
 // NewAccessClient создает новый клиент для проверки прав доступа
@@ -32,7 +32,7 @@ func NewAccessClient(config Config) *AccessClient {
 	} else {
 		logger = NewDefaultLogger(config.LogLevel)
 	}
-	
+
 	return &AccessClient{
 		config: config,
 		client: &http.Client{
@@ -43,13 +43,13 @@ func NewAccessClient(config Config) *AccessClient {
 }
 
 // CheckAccess проверяет права доступа для указанного действия
-func (ac *AccessClient) CheckAccess(action, jwt, application string) (bool, error) {
+func (ac *AccessClient) CheckAccess(action, entitlements string) (bool, error) {
 	startTime := time.Now()
-	
+
 	// Формируем URL запроса
 	url := fmt.Sprintf("%s?action=%s", ac.config.URL, action)
 	ac.logger.Debug("Making access check request: URL=%s, Action=%s", url, action)
-	
+
 	// Создаем HTTP запрос
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -59,12 +59,11 @@ func (ac *AccessClient) CheckAccess(action, jwt, application string) (bool, erro
 		}
 		return false, err
 	}
-	
+
 	// Добавляем необходимые заголовки
-	req.Header.Set("X-Authentik-Jwt", jwt)
-	req.Header.Set("Application", application)
-	ac.logger.Debug("Request headers set: Application=%s, JWT present=%v", application, len(jwt) > 0)
-	
+	req.Header.Set("X-Authentik-Entitlements", entitlements)
+	ac.logger.Debug("Entitlements present=%v", len(entitlements) > 0)
+
 	// Выполняем запрос
 	ac.logger.Debug("Sending access check request...")
 	resp, err := ac.client.Do(req)
@@ -77,10 +76,9 @@ func (ac *AccessClient) CheckAccess(action, jwt, application string) (bool, erro
 		return false, err
 	}
 	defer resp.Body.Close()
-	
 	elapsedMs := time.Since(startTime).Milliseconds()
 	ac.logger.Debug("Access check response received in %d ms: StatusCode=%d", elapsedMs, resp.StatusCode)
-	
+
 	// Проверяем статус ответа
 	if resp.StatusCode != http.StatusOK {
 		ac.logger.Error("Access service returned non-200 status: %d", resp.StatusCode)
@@ -90,7 +88,7 @@ func (ac *AccessClient) CheckAccess(action, jwt, application string) (bool, erro
 		}
 		return false, fmt.Errorf("access service returned non-200 status: %d", resp.StatusCode)
 	}
-	
+
 	// Читаем тело ответа
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -101,9 +99,9 @@ func (ac *AccessClient) CheckAccess(action, jwt, application string) (bool, erro
 		}
 		return false, err
 	}
-	
+
 	ac.logger.Debug("Response body: %s", string(body))
-	
+
 	// Парсим JSON ответ
 	var accessResponse AccessResponse
 	if err := json.Unmarshal(body, &accessResponse); err != nil {
@@ -114,7 +112,7 @@ func (ac *AccessClient) CheckAccess(action, jwt, application string) (bool, erro
 		}
 		return false, err
 	}
-	
+
 	// Проверяем значение поля allowed
 	if accessResponse.Allowed {
 		ac.logger.Debug("Access check successful, access granted. Response: %+v", accessResponse)
@@ -123,4 +121,4 @@ func (ac *AccessClient) CheckAccess(action, jwt, application string) (bool, erro
 		ac.logger.Debug("Access check successful, but access denied. Response: %+v", accessResponse)
 		return false, nil
 	}
-} 
+}
